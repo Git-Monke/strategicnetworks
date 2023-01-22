@@ -1,8 +1,10 @@
 import numpy as np
 import random
 
-BRAIN_STRUCTURE = [90, 12, 12, 12, 18]
+BRAIN_STRUCTURE = [2, 3, 2]
 BRAIN_LENGTH = len(BRAIN_STRUCTURE)
+
+MUTATION_INTENSITY = 0.01
 
 
 def ReLU(x):
@@ -16,6 +18,32 @@ def randomList(len):
         l.append(np.random.random())
 
     return l
+
+# Takes in an array of length 9 and returns if there are any 3 in a rows;
+
+
+def checkForWin(board):
+    for i in range(0, 7, 3):
+        if (board[i] == 0):
+            continue
+
+        if (board[i] == board[i + 1] and board[i] == board[i + 2]):
+            return board[i]
+
+    for i in range(3):
+        if (board[i] == 0):
+            continue
+
+        if (board[i] == board[i + 3] and board[i] == board[i + 6]):
+            return board[i]
+
+    if (board[0] != 0 and board[0] == board[4] and board[0] == board[8]):
+        return board[0]
+
+    if (board[2] != 0 and board[2] == board[4] and board[2] == board[6]):
+        return board[2]
+
+    return 0
 
 # Mixes the values of any two arrays. Will also mix nested arrays if they're at the same index.
 # Ex: [[5, 10], 10] and [[20, 40], 3] might produce [[5, 40], 3] as an output
@@ -42,6 +70,14 @@ def mixArr(mother, father):
         child.extend(longerParent[minLength:])
 
     return child
+
+
+def mutateArr(arr, mutationIntensity=1):
+    for i, value in enumerate(arr):
+        if (isinstance(value, list)):
+            mutateArr(value, mutationIntensity)
+        elif isinstance(value, float):
+            arr[i] = value + (((random.random() * 2) - 1) * mutationIntensity)
 
 
 class Network(object):
@@ -120,7 +156,12 @@ class Player(object):
         else:
             self.network.randomize()
 
+        if (shouldMutate):
+            mutateArr(self.network.weights, MUTATION_INTENSITY)
+            mutateArr(self.network.biases, MUTATION_INTENSITY)
+
     # Setters
+
     @property
     def weights(self):
         return self.network.weights
@@ -128,3 +169,31 @@ class Player(object):
     @property
     def biases(self):
         return self.network.biases
+
+
+class Board(object):
+    def __init__(self):
+        self.claimedBoards = [0]*9
+        self.board = [[0]*9 for _ in range(9)]
+        self.currentBoard = 0
+        self.playerToMove = 1
+
+    def makeMove(self, subsection=0, board=0):
+        boardToPlay = board if self.currentBoard == -1 else self.currentBoard
+
+        if (self.claimedBoards[board] != 0):
+            raise Exception("Illegal move. Tried to play on a completed board")
+
+        if (self.board[boardToPlay][subsection] != 0):
+            raise Exception("Illegal move. Tried to play on occupied square.")
+
+        self.board[boardToPlay][subsection] = self.playerToMove
+        self.playerToMove *= -1
+
+        playerWon = checkForWin(self.board[board])
+
+        if (playerWon != 0):
+            self.claimedBoards[board] = playerWon
+            self.currentBoard = -1
+        else:
+            self.currentBoard = subsection if self.claimedBoards[subsection] == 0 else -1
