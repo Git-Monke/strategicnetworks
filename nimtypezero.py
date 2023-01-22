@@ -1,7 +1,7 @@
 import numpy as np
 import random
 
-BRAIN_STRUCTURE = [2, 3, 2]
+BRAIN_STRUCTURE = [99, 3, 2]
 BRAIN_LENGTH = len(BRAIN_STRUCTURE)
 
 MUTATION_INTENSITY = 0.01
@@ -160,7 +160,7 @@ class Player(object):
             mutateArr(self.network.weights, MUTATION_INTENSITY)
             mutateArr(self.network.biases, MUTATION_INTENSITY)
 
-    # Setters
+    # Getters
 
     @property
     def weights(self):
@@ -175,19 +175,32 @@ class Board(object):
     def __init__(self):
         self.claimedBoards = [0]*9
         self.board = [[0]*9 for _ in range(9)]
+
+        # This is what the networks whom are competing will look at for their input values.
+        # It stores all the board values, and what the current selected board is.
+        # The first 81 inputs are what colors occupy what positions (-1, 0, 1)
+        # The next 9 represent which board is currently in play
+        # The final 9 represent which boards are no longer in play
+        self.inputArray = [0]*99
+
         self.currentBoard = 0
         self.playerToMove = 1
 
+        self.player1 = None
+        self.player2 = None
+
     def makeMove(self, subsection=0, board=0):
-        boardToPlay = board if self.currentBoard == -1 else self.currentBoard
+        board = board if self.currentBoard == -1 else self.currentBoard
 
         if (self.claimedBoards[board] != 0):
             raise Exception("Illegal move. Tried to play on a completed board")
 
-        if (self.board[boardToPlay][subsection] != 0):
+        if (self.board[board][subsection] != 0):
             raise Exception("Illegal move. Tried to play on occupied square.")
 
-        self.board[boardToPlay][subsection] = self.playerToMove
+        self.board[board][subsection] = self.playerToMove
+        self.inputArray[(board * 9) + subsection] = self.playerToMove
+        self.inputArray[80 + board] = 0
         self.playerToMove *= -1
 
         playerWon = checkForWin(self.board[board])
@@ -195,5 +208,7 @@ class Board(object):
         if (playerWon != 0):
             self.claimedBoards[board] = playerWon
             self.currentBoard = -1
+            self.inputArray[90 + board] = 1
         else:
             self.currentBoard = subsection if self.claimedBoards[subsection] == 0 else -1
+            self.inputArray[80 + subsection] = 1
