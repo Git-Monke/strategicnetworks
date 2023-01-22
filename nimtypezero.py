@@ -1,8 +1,5 @@
 import numpy as np
 import random
-import datetime as dt
-
-# np.random.seed(430598)
 
 BRAIN_STRUCTURE = [90, 12, 12, 12, 18]
 BRAIN_LENGTH = len(BRAIN_STRUCTURE)
@@ -10,10 +7,6 @@ BRAIN_LENGTH = len(BRAIN_STRUCTURE)
 
 def ReLU(x):
     return x if x > 0 else 0
-
-
-def sigmoid(x):
-    return 1 / 1 + np.exp(-x)
 
 
 def randomList(len):
