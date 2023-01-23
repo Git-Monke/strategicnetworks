@@ -1,7 +1,8 @@
 import numpy as np
+import time
 import random
 
-BRAIN_STRUCTURE = [99, 3, 2]
+BRAIN_STRUCTURE = [99, 12, 12, 12, 18]
 BRAIN_LENGTH = len(BRAIN_STRUCTURE)
 
 MUTATION_INTENSITY = 0.01
@@ -11,6 +12,23 @@ def ReLU(x):
     return x if x > 0 else 0
 
 
+def sigmoid(x):
+    return 1 / 1 + (np.exp(-x))
+
+
+def softmax(x):
+    exp_x = np.exp(x)
+    sum = exp_x.sum()
+    softmax_x = np.round(exp_x/sum, 3)
+    return softmax_x
+
+
+def filterProbs(probs, board):
+    for i, subsection in enumerate(board):
+        if (subsection in [-1, 1]):
+            probs[i] = 0
+
+
 def randomList(len):
     l = []
 
@@ -18,6 +36,18 @@ def randomList(len):
         l.append(np.random.random())
 
     return l
+
+
+def getMaxNumIndx(arr):
+    indx = 0
+    best = 0
+
+    for index, value in enumerate(arr):
+        if value > best:
+            indx = index
+            best = value
+
+    return indx
 
 # Takes in an array of length 9 and returns if there are any 3 in a rows;
 
@@ -42,6 +72,12 @@ def checkForWin(board):
 
     if (board[2] != 0 and board[2] == board[4] and board[2] == board[6]):
         return board[2]
+
+    if (0 not in board):
+        p1Count = board.count(1)
+        p2Count = board.count(-1)
+
+        return 1 if p1Count > p2Count else -1
 
     return 0
 
@@ -70,6 +106,15 @@ def mixArr(mother, father):
         child.extend(longerParent[minLength:])
 
     return child
+
+
+def multArr(arr1, arr2):
+    result = []
+
+    for x in range(len(arr1)):
+        result.append(arr1[x] * arr2[x])
+
+    return result
 
 
 def mutateArr(arr, mutationIntensity=1):
@@ -107,7 +152,7 @@ class Network(object):
     # Setters and getters
     @ property
     def outputs(self):
-        return self.nodes[len(self.nodes) - 1]
+        return softmax(self.nodes[len(self.nodes) - 1])
 
     @ property
     def inputs(self):
@@ -130,7 +175,7 @@ class Network(object):
                 for k, node in enumerate(previousLayer):
                     sum += node * layerWeights[k][j] + layerBiases[k][j]
 
-                currentLayer[j] = ReLU(sum)
+                currentLayer[j] = sigmoid(sum)
 
     # Extra functions for making random networks
     def randomizeConnections(self, connections):
@@ -180,19 +225,22 @@ class Board(object):
         # It stores all the board values, and what the current selected board is.
         # The first 81 inputs are what colors occupy what positions (-1, 0, 1)
         # The next 9 represent which board is currently in play
-        # The final 9 represent which boards are no longer in play
+        # The final 9 represent who won which boards
         self.inputArray = [0]*99
 
-        self.currentBoard = 0
+        self.currentBoard = -1
         self.playerToMove = 1
 
-        self.player1 = None
-        self.player2 = None
+        self._player1 = None
+        self._player2 = None
+
+        self.winner = 0
 
     def makeMove(self, subsection=0, board=0):
         board = board if self.currentBoard == -1 else self.currentBoard
 
         if (self.claimedBoards[board] != 0):
+            print(board, self.claimedBoards)
             raise Exception("Illegal move. Tried to play on a completed board")
 
         if (self.board[board][subsection] != 0):
@@ -207,8 +255,99 @@ class Board(object):
 
         if (playerWon != 0):
             self.claimedBoards[board] = playerWon
-            self.currentBoard = -1
             self.inputArray[90 + board] = 1
+
+        self.currentBoard = subsection if self.claimedBoards[subsection] == 0 else -1
+        self.inputArray[80 + subsection] = 1
+
+    def step(self):
+        if (self.player1 == None or self.player2 == None):
+            raise Exception("Cannot step unless there are two players")
+
+        outputs = []
+
+        if (self.playerToMove == 1):
+            self.player1.network.propogate()
+            outputs = self.player1.network.outputs
         else:
-            self.currentBoard = subsection if self.claimedBoards[subsection] == 0 else -1
-            self.inputArray[80 + subsection] = 1
+            self.player2.network.propogate()
+            outputs = self.player2.network.outputs
+
+        # Board probabilities
+        boardProbs = outputs[:9]
+        subsectionProbs = outputs[9:]
+
+        # Only choose what the newtork thinks is the best board if the scope is unlimited
+
+        if (self.currentBoard != -1):
+            boardIndx = self.currentBoard
+        else:
+            filterProbs(boardProbs, self.claimedBoards)
+            boardIndx = getMaxNumIndx(boardProbs)
+
+        # filter the potential moves by whether or not they are legal, then choose the best of those moves
+        filterProbs(subsectionProbs, self.board[boardIndx])
+        subsectionIndx = getMaxNumIndx(subsectionProbs)
+
+        self.makeMove(subsectionIndx, boardIndx)
+
+        win = checkForWin(self.claimedBoards)
+
+        if win != 0:
+            self.winner = win
+            return True
+
+        return False
+
+    @property
+    def player1(self):
+        return self._player1
+
+    @player1.setter
+    def player1(self, player):
+        if (isinstance(player, Player) != True):
+            raise Exception("Can only set player property to Player class")
+
+        self._player1 = player
+        player.network.inputs = self.inputArray
+
+    @property
+    def player2(self):
+        return self._player2
+
+    @player2.setter
+    def player2(self, player):
+        if (isinstance(player, Player) != True):
+            raise Exception("Can only set player property to Player class")
+
+        self._player2 = player
+        player.network.inputs = self.inputArray
+
+# PERFORMANCE TESTING
+# total = 0
+# count = 0
+
+# gameCount = 100
+
+# for _ in range(gameCount):
+#     startTime = time.time()
+
+#     board = Board()
+#     player1 = Player()
+#     player2 = Player()
+
+#     board.player1 = player1
+#     board.player2 = player2
+
+#     finished = False
+
+#     while not finished:
+#         finished = board.step()
+
+#     benchmark = time.time() - startTime
+#     total += benchmark
+#     count += 1
+#     print("Game %d took %1.10fms" % (count, benchmark * 1000))
+
+# print("Program took an average of %1.4fms per game (Average of %d games). Total runtime: %1.2fs" %
+#       ((total / count)*1000, gameCount, total))
