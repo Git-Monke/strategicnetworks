@@ -1,6 +1,7 @@
 import numpy as np
 import time
 import random
+import profile
 
 BRAIN_STRUCTURE = [99, 12, 12, 12, 18]
 BRAIN_LENGTH = len(BRAIN_STRUCTURE)
@@ -323,7 +324,7 @@ class Board(object):
         self._player2 = player
         player.network.inputs = self.inputArray
 
-# PERFORMANCE TESTING
+
 # total = 0
 # count = 0
 
